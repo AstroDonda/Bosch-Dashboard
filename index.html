@@ -1074,80 +1074,100 @@ tbody.innerHTML = userEntries.slice(0,10).map(e=>`<tr>
 // ============================================================
 async function exportAllPagesToPDF() {
 try {
-showToast('📄 Starting PDF generation...');
-
-// Check if required libraries are loaded
-if(!window.html2pdf) {
-showToast('❌ PDF library not loaded. Please refresh the page.');
-return;
-}
+showToast('📄 Starting PDF report...');
 
 const views = ['overview', 'f06', 'oee', 'volume', 'breakdowns', 'tracker', 'impact'];
 const currentViewId = document.querySelector('.view.active')?.id?.split('view-')[1] || 'overview';
-const container = document.createElement('div');
-container.style.padding = '20px';
-container.style.backgroundColor = '#fff';
+const pdf = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+let isFirstPage = true;
 
-// Create cover page
-const coverHTML = `
-<div style="width:210mm;height:297mm;padding:40mm;background:#f0f4f8;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;page-break-after:always;">
-<h1 style="color:#0057a8;font-size:42px;margin:0 0 20px 0;font-weight:700;">Bosch SVE3600WR</h1>
-<h2 style="color:#475569;font-size:28px;margin:0 0 30px 0;font-weight:500;">Upgrade Dashboard</h2>
-<p style="color:#94a3b8;font-size:14px;margin:20px 0;">F06 Post-Upgrade Performance Report</p>
-<p style="color:#94a3b8;font-size:12px;margin:30px 0;">${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
-<p style="color:#0057a8;font-weight:700;font-size:14px;margin-top:80px;">Executive Summary • Analysis • KPI Tracking</p>
+// Create and capture cover page
+showToast('📄 Generating cover page...');
+const coverDiv = document.createElement('div');
+coverDiv.style.width = '800px';
+coverDiv.style.height = '1131px';
+coverDiv.style.padding = '80px';
+coverDiv.style.backgroundColor = '#f0f4f8';
+coverDiv.style.fontFamily = 'DM Sans, sans-serif';
+coverDiv.style.textAlign = 'center';
+coverDiv.style.display = 'flex';
+coverDiv.style.flexDirection = 'column';
+coverDiv.style.justifyContent = 'center';
+coverDiv.style.alignItems = 'center';
+coverDiv.style.boxSizing = 'border-box';
+coverDiv.innerHTML = `
+<div>
+<h1 style="color:#0057a8;font-size:52px;margin:0 0 20px 0;font-weight:700;">Bosch SVE3600WR</h1>
+<h2 style="color:#475569;font-size:36px;margin:0 0 40px 0;font-weight:500;">Upgrade Dashboard</h2>
+<p style="color:#94a3b8;font-size:18px;margin:30px 0;">F06 Post-Upgrade Performance Report</p>
+<p style="color:#94a3b8;font-size:14px;margin:40px 0;">${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+<p style="color:#0057a8;font-weight:700;font-size:15px;margin-top:100px;">Executive Summary • Analysis • KPI Tracking</p>
 </div>
 `;
+document.body.appendChild(coverDiv);
 
-let fullHTML = coverHTML;
+let coverCanvas = await html2canvas(coverDiv, {
+scale: 2,
+useCORS: true,
+logging: false,
+backgroundColor: '#f0f4f8',
+windowWidth: 800,
+windowHeight: 1131
+});
+let coverImg = coverCanvas.toDataURL('image/png');
+pdf.addImage(coverImg, 'PNG', 0, 0, 210, 297);
+document.body.removeChild(coverDiv);
 
-// Capture each view
+// Capture each dashboard view
 for(let i = 0; i < views.length; i++) {
 const viewId = views[i];
 const viewEl = document.getElementById('view-' + viewId);
 if(!viewEl) continue;
 
-showToast(`📄 Processing page ${i+1}/${views.length}...`);
+showToast(`📄 Rendering page ${i+1}/7: ${viewId.toUpperCase()}...`);
 
-// Show and render the view
+// Hide all views and show current one
 document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
 viewEl.style.display = 'block';
+
+// Render the view (this creates the charts)
 renderView(viewId);
 
-// Wait for charts to render
-await new Promise(resolve => setTimeout(resolve, 2500));
+// Wait LONG enough for all Chart.js charts to render
+await new Promise(resolve => setTimeout(resolve, 4000));
 
-// Clone the view with styling
-const clone = viewEl.cloneNode(true);
-clone.style.display = 'block';
-clone.style.pageBreakBefore = 'always';
-clone.style.pageBreakAfter = i < views.length - 1 ? 'always' : 'avoid';
-clone.style.padding = '20px';
-clone.style.backgroundColor = '#fff';
-clone.style.minHeight = 'auto';
+showToast(`📄 Capturing page ${i+1}/7...`);
 
-fullHTML += clone.outerHTML;
+// Capture the visible view as image
+try {
+const viewCanvas = await html2canvas(viewEl, {
+scale: 2,
+useCORS: true,
+logging: false,
+backgroundColor: '#f0f4f8',
+windowWidth: 800,
+windowHeight: viewEl.scrollHeight,
+allowTaint: true
+});
+
+const viewImg = viewCanvas.toDataURL('image/png');
+const imgHeight = (viewCanvas.height * 210) / viewCanvas.width;
+
+// Add new page and image
+if(!isFirstPage) pdf.addPage();
+pdf.addImage(viewImg, 'PNG', 0, 0, 210, imgHeight);
+isFirstPage = false;
+
+} catch(pageError) {
+console.error(`Error capturing page ${viewId}:`, pageError);
+showToast(`⚠️ Error on page ${i+1}, continuing...`);
 }
 
-container.innerHTML = fullHTML;
-document.body.appendChild(container);
+showToast(`✅ Page ${i+1}/7 complete`);
+}
 
-showToast('📄 Converting to PDF...');
-
-// Generate PDF
-const opt = {
-margin: [5, 5, 5, 5],
-filename: 'Bosch_Dashboard_Report.pdf',
-image: {type: 'png', quality: 0.98},
-html2canvas: {scale: 2, logging: false, useCORS: true},
-jsPDF: {orientation: 'portrait', unit: 'mm', format: 'a4'}
-};
-
-await html2pdf().set(opt).from(container).save();
-
-// Cleanup
-document.body.removeChild(container);
-
+showToast('📄 Finalizing PDF...');
+pdf.save('Bosch_Dashboard_Report.pdf');
 showToast('✅ PDF downloaded successfully!');
 
 // Restore original view
@@ -1161,7 +1181,7 @@ renderView(currentViewId);
 
 } catch(error) {
 console.error('PDF Export Error:', error);
-showToast('❌ Error generating PDF. Check console for details.');
+showToast('❌ Error: ' + error.message);
 }
 }
 
