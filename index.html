@@ -7,6 +7,7 @@
 <title>Bosch SVE3600WR — F06 KPI Dashboard | Unilever Boksburg</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root {
 --bg: #f0f4f8;
@@ -217,7 +218,7 @@ Bosch Upgrades - Dashboard
 <span class="badge badge-green">F06: Done ✓</span>
 <span class="badge badge-amber">F09: WIP</span>
 <span class="badge badge-blue">1 / 12 Commissioned</span>
-<button class="btn btn-outline" onclick="showToast('📊 Export: Save this page as PDF using Ctrl+P → Save as PDF')">⬇ Export PDF</button>
+<button class="btn btn-outline" onclick="exportAllPagesToPDF()">⬇ Export PDF</button>
 <button class="btn btn-primary" onclick="nav('entry',null)">+ Log Data</button>
 </div>
 </div>
@@ -1065,6 +1066,64 @@ tbody.innerHTML = userEntries.slice(0,10).map(e=>`<tr>
 <td style="font-size:11px;color:var(--red)">${e.bd||'—'}</td>
 <td style="font-size:11px;color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.comments||'—'}</td>
 </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:18px">No entries yet.</td></tr>';
+}
+
+// ============================================================
+// PDF EXPORT
+// ============================================================
+function exportAllPagesToPDF() {
+showToast('📄 Generating PDF... This may take a moment');
+setTimeout(() => {
+const views = ['overview', 'f06', 'oee', 'volume', 'breakdowns', 'tracker', 'impact'];
+const element = document.createElement('div');
+element.style.padding = '20px';
+element.style.backgroundColor = '#f0f4f8';
+element.style.fontFamily = 'DM Sans, sans-serif';
+
+let htmlContent = `
+<div style="text-align:center;margin-bottom:40px;">
+<h1 style="color:#0057a8;margin-bottom:5px;">Bosch SVE3600WR Upgrade Dashboard</h1>
+<p style="color:#475569;font-size:14px;">Comprehensive KPI Report · F06 Post-Upgrade Performance</p>
+<p style="color:#94a3b8;font-size:12px;">Generated: ${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+</div>
+`;
+
+views.forEach((viewId, idx) => {
+const viewEl = document.getElementById('view-' + viewId);
+if(!viewEl) return;
+const clone = viewEl.cloneNode(true);
+clone.style.display = 'block';
+clone.style.pageBreakBefore = idx > 0 ? 'always' : 'avoid';
+clone.style.padding = '20px';
+clone.style.backgroundColor = '#fff';
+clone.style.marginBottom = '40px';
+clone.style.borderRadius = '8px';
+const canvases = clone.querySelectorAll('canvas');
+canvases.forEach(canvas => {
+const img = document.createElement('img');
+img.src = canvas.toDataURL('image/png');
+img.style.maxWidth = '100%';
+img.style.height = 'auto';
+img.style.margin = '10px 0';
+canvas.parentNode.replaceChild(img, canvas);
+});
+htmlContent += clone.outerHTML;
+});
+
+element.innerHTML = htmlContent;
+
+const opt = {
+margin: 10,
+filename: 'Bosch_Dashboard_Report.pdf',
+image: {type:'jpeg',quality:0.98},
+html2canvas: {scale:2},
+jsPDF: {orientation:'portrait',unit:'mm',format:'a4'}
+};
+
+html2pdf().set(opt).from(element).save().then(() => {
+showToast('✅ PDF exported successfully!');
+});
+}, 300);
 }
 
 // ============================================================
