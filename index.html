@@ -7,6 +7,7 @@
 <title>Bosch SVE3600WR — F06 KPI Dashboard | Unilever Boksburg</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root {
@@ -1072,93 +1073,95 @@ tbody.innerHTML = userEntries.slice(0,10).map(e=>`<tr>
 // PDF EXPORT
 // ============================================================
 async function exportAllPagesToPDF() {
-showToast('📄 Generating PDF... rendering all pages');
+try {
+showToast('📄 Starting PDF generation...');
+
+// Check if required libraries are loaded
+if(!window.html2pdf) {
+showToast('❌ PDF library not loaded. Please refresh the page.');
+return;
+}
+
 const views = ['overview', 'f06', 'oee', 'volume', 'breakdowns', 'tracker', 'impact'];
-const currentViewId = document.querySelector('.view.active').id.split('view-')[1];
-const pdf = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-const pageImages = [];
+const currentViewId = document.querySelector('.view.active')?.id?.split('view-')[1] || 'overview';
+const container = document.createElement('div');
+container.style.padding = '20px';
+container.style.backgroundColor = '#fff';
 
 // Create cover page
-const coverDiv = document.createElement('div');
-coverDiv.style.width = '210mm';
-coverDiv.style.height = '297mm';
-coverDiv.style.padding = '40mm';
-coverDiv.style.backgroundColor = '#f0f4f8';
-coverDiv.style.fontFamily = 'DM Sans, sans-serif';
-coverDiv.style.boxSizing = 'border-box';
-coverDiv.innerHTML = `
-<div style="text-align:center;margin-top:60mm;">
-<h1 style="color:#0057a8;font-size:36px;margin:0 0 20px 0;font-weight:700;">Bosch SVE3600WR</h1>
-<h2 style="color:#475569;font-size:24px;margin:0 0 30px 0;font-weight:500;">Upgrade Dashboard Report</h2>
-<p style="color:#94a3b8;font-size:14px;margin:20px 0;">F06 Post-Upgrade Performance Analysis</p>
+const coverHTML = `
+<div style="width:210mm;height:297mm;padding:40mm;background:#f0f4f8;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;page-break-after:always;">
+<h1 style="color:#0057a8;font-size:42px;margin:0 0 20px 0;font-weight:700;">Bosch SVE3600WR</h1>
+<h2 style="color:#475569;font-size:28px;margin:0 0 30px 0;font-weight:500;">Upgrade Dashboard</h2>
+<p style="color:#94a3b8;font-size:14px;margin:20px 0;">F06 Post-Upgrade Performance Report</p>
 <p style="color:#94a3b8;font-size:12px;margin:30px 0;">${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
-<p style="color:#0057a8;font-weight:700;font-size:13px;margin-top:60mm;">Comprehensive KPI Report</p>
+<p style="color:#0057a8;font-weight:700;font-size:14px;margin-top:80px;">Executive Summary • Analysis • KPI Tracking</p>
 </div>
 `;
-document.body.appendChild(coverDiv);
 
-// Capture cover page
-const coverCanvas = await html2canvas(coverDiv, {scale:2,useCORS:true});
-pdf.addImage(coverCanvas.toDataURL('image/png'),'PNG',0,0,210,297);
-document.body.removeChild(coverDiv);
+let fullHTML = coverHTML;
 
-// Process each view
+// Capture each view
 for(let i = 0; i < views.length; i++) {
 const viewId = views[i];
 const viewEl = document.getElementById('view-' + viewId);
 if(!viewEl) continue;
 
-showToast(`📄 Rendering page ${i+1} of ${views.length}...`);
+showToast(`📄 Processing page ${i+1}/${views.length}...`);
 
-// Show the view
-document.querySelectorAll('.view').forEach(v=>v.style.display='none');
-viewEl.style.display='block';
-
-// Render charts
+// Show and render the view
+document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+viewEl.style.display = 'block';
 renderView(viewId);
 
-// Wait for charts to fully render
-await new Promise(r => setTimeout(r, 2000));
+// Wait for charts to render
+await new Promise(resolve => setTimeout(resolve, 2500));
 
-// Make view visible for capture
-viewEl.style.position = 'relative';
-viewEl.style.width = '100%';
+// Clone the view with styling
+const clone = viewEl.cloneNode(true);
+clone.style.display = 'block';
+clone.style.pageBreakBefore = 'always';
+clone.style.pageBreakAfter = i < views.length - 1 ? 'always' : 'avoid';
+clone.style.padding = '20px';
+clone.style.backgroundColor = '#fff';
+clone.style.minHeight = 'auto';
 
-// Capture the view as image
-const canvas = await html2canvas(viewEl, {scale:2,useCORS:true,logging:false,backgroundColor:'#f0f4f8'});
-const imgData = canvas.toDataURL('image/png');
-
-// Calculate dimensions for PDF
-const pdfWidth = 210;
-const pdfHeight = 297;
-const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-// Add to PDF - split into multiple pages if needed
-let yPosition = 0;
-let remainingHeight = imgHeight;
-let isFirstPage = true;
-
-while(remainingHeight > 0) {
-if(!isFirstPage) pdf.addPage();
-const heightToUse = Math.min(pdfHeight, remainingHeight);
-const sourceHeight = (heightToUse * canvas.height) / imgHeight;
-pdf.addImage(imgData,'PNG',0,0,pdfWidth,heightToUse,undefined,'FAST');
-remainingHeight -= pdfHeight;
-isFirstPage = false;
-}
+fullHTML += clone.outerHTML;
 }
 
-// Save PDF
-pdf.save('Bosch_Dashboard_Report.pdf');
-showToast('✅ PDF exported successfully!');
+container.innerHTML = fullHTML;
+document.body.appendChild(container);
+
+showToast('📄 Converting to PDF...');
+
+// Generate PDF
+const opt = {
+margin: [5, 5, 5, 5],
+filename: 'Bosch_Dashboard_Report.pdf',
+image: {type: 'png', quality: 0.98},
+html2canvas: {scale: 2, logging: false, useCORS: true},
+jsPDF: {orientation: 'portrait', unit: 'mm', format: 'a4'}
+};
+
+await html2pdf().set(opt).from(container).save();
+
+// Cleanup
+document.body.removeChild(container);
+
+showToast('✅ PDF downloaded successfully!');
 
 // Restore original view
-document.querySelectorAll('.view').forEach(v=>v.style.display='none');
-const currentView = document.getElementById('view-' + currentViewId);
-if(currentView) {
-currentView.classList.add('active');
-currentView.style.display='block';
+document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+const originalView = document.getElementById('view-' + currentViewId);
+if(originalView) {
+originalView.classList.add('active');
+originalView.style.display = 'block';
 renderView(currentViewId);
+}
+
+} catch(error) {
+console.error('PDF Export Error:', error);
+showToast('❌ Error generating PDF. Check console for details.');
 }
 }
 
