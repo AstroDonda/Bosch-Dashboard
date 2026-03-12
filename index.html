@@ -1074,82 +1074,92 @@ tbody.innerHTML = userEntries.slice(0,10).map(e=>`<tr>
 async function exportAllPagesToPDF() {
 showToast('📄 Generating PDF... rendering all pages');
 const views = ['overview', 'f06', 'oee', 'volume', 'breakdowns', 'tracker', 'impact'];
-const currentView = document.querySelector('.view.active');
-const element = document.createElement('div');
-element.style.padding = '20px';
-element.style.backgroundColor = '#f0f4f8';
-element.style.fontFamily = 'DM Sans, sans-serif';
+const currentViewId = document.querySelector('.view.active').id.split('view-')[1];
+const pdf = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+const pageImages = [];
 
-let htmlContent = `
-<div style="text-align:center;margin-bottom:40px;padding:20px;background:#fff;border-radius:8px;">
-<h1 style="color:#0057a8;margin-bottom:5px;font-size:28px;">Bosch SVE3600WR Upgrade Dashboard</h1>
-<p style="color:#475569;font-size:14px;margin:10px 0;">Comprehensive KPI Report · F06 Post-Upgrade Performance</p>
-<p style="color:#94a3b8;font-size:12px;">${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+// Create cover page
+const coverDiv = document.createElement('div');
+coverDiv.style.width = '210mm';
+coverDiv.style.height = '297mm';
+coverDiv.style.padding = '40mm';
+coverDiv.style.backgroundColor = '#f0f4f8';
+coverDiv.style.fontFamily = 'DM Sans, sans-serif';
+coverDiv.style.boxSizing = 'border-box';
+coverDiv.innerHTML = `
+<div style="text-align:center;margin-top:60mm;">
+<h1 style="color:#0057a8;font-size:36px;margin:0 0 20px 0;font-weight:700;">Bosch SVE3600WR</h1>
+<h2 style="color:#475569;font-size:24px;margin:0 0 30px 0;font-weight:500;">Upgrade Dashboard Report</h2>
+<p style="color:#94a3b8;font-size:14px;margin:20px 0;">F06 Post-Upgrade Performance Analysis</p>
+<p style="color:#94a3b8;font-size:12px;margin:30px 0;">${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+<p style="color:#0057a8;font-weight:700;font-size:13px;margin-top:60mm;">Comprehensive KPI Report</p>
 </div>
 `;
+document.body.appendChild(coverDiv);
 
-for(const viewId of views) {
+// Capture cover page
+const coverCanvas = await html2canvas(coverDiv, {scale:2,useCORS:true});
+pdf.addImage(coverCanvas.toDataURL('image/png'),'PNG',0,0,210,297);
+document.body.removeChild(coverDiv);
+
+// Process each view
+for(let i = 0; i < views.length; i++) {
+const viewId = views[i];
 const viewEl = document.getElementById('view-' + viewId);
 if(!viewEl) continue;
 
-// Show the view to render charts
+showToast(`📄 Rendering page ${i+1} of ${views.length}...`);
+
+// Show the view
 document.querySelectorAll('.view').forEach(v=>v.style.display='none');
 viewEl.style.display='block';
 
-// Render the view to generate charts
+// Render charts
 renderView(viewId);
 
-// Wait for charts to render
-await new Promise(r => setTimeout(r, 1500));
+// Wait for charts to fully render
+await new Promise(r => setTimeout(r, 2000));
 
-// Clone the visible, rendered view
-const clone = viewEl.cloneNode(true);
-clone.style.display = 'block';
-clone.style.pageBreakAfter = 'always';
-clone.style.pageBreakBefore = 'avoid';
-clone.style.padding = '20px';
-clone.style.backgroundColor = '#fff';
-clone.style.marginBottom = '0';
-clone.style.borderRadius = '0';
+// Make view visible for capture
+viewEl.style.position = 'relative';
+viewEl.style.width = '100%';
 
-// Convert all canvas elements to images
-const canvases = clone.querySelectorAll('canvas');
-canvases.forEach(canvas => {
-if(canvas.width && canvas.height && canvas.getContext) {
-const img = document.createElement('img');
-img.src = canvas.toDataURL('image/png');
-img.style.maxWidth = '100%';
-img.style.height = 'auto';
-img.style.display = 'block';
-img.style.margin = '15px 0';
-canvas.parentNode.replaceChild(img, canvas);
+// Capture the view as image
+const canvas = await html2canvas(viewEl, {scale:2,useCORS:true,logging:false,backgroundColor:'#f0f4f8'});
+const imgData = canvas.toDataURL('image/png');
+
+// Calculate dimensions for PDF
+const pdfWidth = 210;
+const pdfHeight = 297;
+const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+// Add to PDF - split into multiple pages if needed
+let yPosition = 0;
+let remainingHeight = imgHeight;
+let isFirstPage = true;
+
+while(remainingHeight > 0) {
+if(!isFirstPage) pdf.addPage();
+const heightToUse = Math.min(pdfHeight, remainingHeight);
+const sourceHeight = (heightToUse * canvas.height) / imgHeight;
+pdf.addImage(imgData,'PNG',0,0,pdfWidth,heightToUse,undefined,'FAST');
+remainingHeight -= pdfHeight;
+isFirstPage = false;
 }
-});
-
-htmlContent += clone.outerHTML;
 }
 
-element.innerHTML = htmlContent;
-
-const opt = {
-margin: [8, 8, 8, 8],
-filename: 'Bosch_Dashboard_Report.pdf',
-image: {type:'png',quality:0.98},
-html2canvas: {scale:2,useCORS:true,logging:false},
-jsPDF: {orientation:'portrait',unit:'mm',format:'a4',compress:true}
-};
-
-try {
-await html2pdf().set(opt).from(element).save();
+// Save PDF
+pdf.save('Bosch_Dashboard_Report.pdf');
 showToast('✅ PDF exported successfully!');
-} catch(e) {
-console.error('PDF export error:', e);
-showToast('❌ Error generating PDF');
-}
 
 // Restore original view
 document.querySelectorAll('.view').forEach(v=>v.style.display='none');
-if(currentView) currentView.classList.add('active');
+const currentView = document.getElementById('view-' + currentViewId);
+if(currentView) {
+currentView.classList.add('active');
+currentView.style.display='block';
+renderView(currentViewId);
+}
 }
 
 // ============================================================
