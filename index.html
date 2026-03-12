@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
 --bg: #f0f4f8;
@@ -236,6 +237,8 @@ Bosch Upgrades - Dashboard
 <span class="badge badge-green">F06: Done ✓</span>
 <span class="badge badge-amber">F09: WIP</span>
 <span class="badge badge-blue">1 / 12 Commissioned</span>
+<input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelUpload(event)"/>
+<button class="btn btn-outline" onclick="document.getElementById('excelUpload').click()">📤 Upload Excel</button>
 <button class="btn btn-outline" onclick="exportAllPagesToPDF()">⬇ Export PDF</button>
 <button class="btn btn-primary" onclick="nav('entry',null)">+ Log Data</button>
 </div>
@@ -249,31 +252,31 @@ Bosch Upgrades - Dashboard
 <div class="sec-header">
 <div>
 <div class="sec-title">Executive Overview</div>
-<div class="sec-sub">F06 post-upgrade performance · Real data from 04 Feb 2026 onwards</div>
+<div class="sec-sub" id="overview-sub"></div>
 </div>
 <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted)" id="live-date"></div>
 </div>
 
 <div class="stat-row stat-4">
 <div class="stat-card sc-blue">
-<div class="stat-label">F06 Avg OEE (Day)</div>
-<div class="stat-val sv-blue">49.5%</div>
-<div class="stat-delta">Target: 65% | <span class="dd">↓ Below target</span></div>
+<div class="stat-label">Avg OEE (Day)</div>
+<div class="stat-val sv-blue" id="stat-avg-day">—</div>
+<div class="stat-delta" id="stat-avg-day-delta"></div>
 </div>
 <div class="stat-card sc-green">
-<div class="stat-label">F06 Avg OEE (Night)</div>
-<div class="stat-val sv-green">52.2%</div>
-<div class="stat-delta">Night slightly stronger than day</div>
+<div class="stat-label">Avg OEE (Night)</div>
+<div class="stat-val sv-green" id="stat-avg-night">—</div>
+<div class="stat-delta" id="stat-avg-night-delta"></div>
 </div>
 <div class="stat-card sc-amber">
 <div class="stat-label">Breakdown Events</div>
-<div class="stat-val sv-amber">4</div>
-<div class="stat-delta">Since commissioning (04 Feb 26)</div>
+<div class="stat-val sv-amber" id="stat-bd-count">—</div>
+<div class="stat-delta" id="stat-bd-delta"></div>
 </div>
 <div class="stat-card sc-red">
 <div class="stat-label">Process Failures</div>
-<div class="stat-val sv-red">11</div>
-<div class="stat-delta">Mainly powder supply issues</div>
+<div class="stat-val sv-red" id="stat-pf-count">—</div>
+<div class="stat-delta" id="stat-pf-delta"></div>
 </div>
 </div>
 
@@ -368,7 +371,7 @@ Bosch Upgrades - Dashboard
 
 <div class="view" id="view-oee">
 <div class="sec-header">
-<div><div class="sec-title">OEE Trend Analysis</div><div class="sec-sub">F06 day & night shift OEE over time · Target 65%</div></div>
+<div><div class="sec-title">OEE Trend Analysis</div><div class="sec-sub" id="oee-trend-sub"></div></div>
 </div>
 <div class="stat-row stat-3">
 <div class="stat-card sc-green">
@@ -742,6 +745,45 @@ if(v === null || v === undefined) return '<span style="color:var(--text-muted)">
 return `<span class="${v>=20?'cg':v>=10?'ca':'cr'} fw7">${v}t</span>`;
 }
 
+function updateAllTitles() {
+// Update top bar subtitle based on machine data
+const machineData = MACHINES_DATA[currentMachine];
+const hasData = machineData && machineData.length > 0;
+if(!hasData) {
+document.getElementById('view-label').textContent = `${currentMachine} — No data available`;
+} else {
+const lastDate = machineData[machineData.length - 1].date;
+document.getElementById('view-label').textContent = `${currentMachine} Real Data · Last entry: ${lastDate}`;
+}
+
+// Overview subtitle
+const schedule = UPGRADE_SCHEDULE.find(s=>s.machine===currentMachine);
+const overviewSub = hasData 
+  ? `${currentMachine} ${schedule?.status === 'Done' ? 'post-upgrade' : ''} performance · Real data from ${machineData[0].date} onwards`
+  : `${currentMachine} — Awaiting commissioning${schedule ? ` (scheduled: ${schedule.start})` : ''}`;
+  
+document.getElementById('overview-sub').textContent = overviewSub;
+
+// Update all section titles
+document.getElementById('f06-title').textContent = `${currentMachine} Live KPI Dashboard`;
+document.getElementById('f06-sub').textContent = hasData ? `All captured data since ${machineData[0].date}` : 'No data available - awaiting first entry';
+document.getElementById('oee-trend-sub').textContent = hasData ? `${currentMachine} day & night shift OEE over time · Target 65%` : `${currentMachine} — No KPI data yet`;
+document.getElementById('volume-trend-sub').textContent = hasData ? `${currentMachine} daily production output in tonnes · Target: >10 tons/shift` : `${currentMachine} — No volume data yet`;
+document.getElementById('breakdowns-sub').textContent = hasData ? `${currentMachine} real event log since commissioning` : `${currentMachine} — No breakdown records yet`;
+document.getElementById('impact-title').textContent = `Upgrade Impact — ${currentMachine}`;
+document.getElementById('impact-sub').textContent = hasData ? 'Commissioning baseline vs post-upgrade performance trend' : `${currentMachine} commissioning pending`;
+document.getElementById('causes-title').textContent = `Top Failure Root Causes — ${currentMachine}`;
+document.getElementById('heatmap-title').textContent = `${currentMachine} Daily OEE Heatmap`;
+document.getElementById('fulllog-title').textContent = `Full ${currentMachine} Daily Log`;
+document.getElementById('oee-day-title').textContent = `${currentMachine} OEE Day Shift — Full Trend`;
+document.getElementById('oee-night-title').textContent = `${currentMachine} OEE Night Shift — Full Trend`;
+document.getElementById('volume-title').textContent = `${currentMachine} Volume — Day vs Night (tonnes)`;
+document.getElementById('bd-log-title').textContent = `${currentMachine} Mechanical Breakdown Log`;
+document.getElementById('pf-log-title').textContent = `${currentMachine} Process Failure Log`;
+document.getElementById('stabilise-title').textContent = `${currentMachine} OEE Over Time — Stabilisation Curve`;
+document.getElementById('target-days-title').textContent = `${currentMachine}: Days with OEE ≥ 65% (Target)`;
+}
+
 function switchMachine(machine) {
 currentMachine = machine;
 document.getElementById('machineSelector').value = machine;
@@ -750,7 +792,7 @@ const activeView = document.querySelector('.view.active')?.id?.split('view-')[1]
 const labels = {overview:'Executive Overview',f06:'{M} Live KPIs',oee:'OEE Trend Analysis',volume:'Volume Analysis',breakdowns:'Breakdowns & Process Failures',tracker:'Upgrade Tracker',impact:'Upgrade Impact',entry:'Log Data'};
 let viewLabel = (labels[activeView]||activeView);
 viewLabel = viewLabel.replace('{M}', machine);
-document.getElementById('view-label').textContent = viewLabel + ' · ' + machine + ' Real Data';
+updateAllTitles();
 renderView(activeView);
 }
 
@@ -808,7 +850,7 @@ return {label,data,borderColor:color,backgroundColor:fill?color+'18':'transparen
 function getOEEArrays() {
 const machineData = MACHINES_DATA[currentMachine];
 const labels=[], dayVals=[], nightVals=[], dayColors=[], nightColors=[];
-machineData.forEach(d=>{
+(machineData || []).forEach(d=>{
 const numD = numericOEE(d.oeeDay);
 const numN = numericOEE(d.oeeNight);
 const specD = isSpecialDay(d.oeeDay);
@@ -822,7 +864,95 @@ nightVals.push(numN);
 return {labels, dayVals, nightVals};
 }
 
+// Calculate OEE statistics for current machine
+function getOEEStats() {
+const machineData = MACHINES_DATA[currentMachine];
+if(!machineData || machineData.length === 0) return {bestDay:0,worstDay:0,bestNight:0,avgDay:0,avgNight:0,daysAbove65:0};
+
+const dayVals = machineData.map(d=>numericOEE(d.oeeDay)).filter(v=>v!==null);
+const nightVals = machineData.map(d=>numericOEE(d.oeeNight)).filter(v=>v!==null);
+
+const bestDay = dayVals.length > 0 ? Math.max(...dayVals) : 0;
+const worstDay = dayVals.length > 0 ? Math.min(...dayVals) : 0;
+const bestNight = nightVals.length > 0 ? Math.max(...nightVals) : 0;
+const avgDay = dayVals.length > 0 ? Math.round(dayVals.reduce((a,b)=>a+b,0)/dayVals.length) : 0;
+const avgNight = nightVals.length > 0 ? Math.round(nightVals.reduce((a,b)=>a+b,0)/nightVals.length) : 0;
+const daysAbove65 = dayVals.filter(v=>v>=65).length;
+
+return {bestDay, worstDay, bestNight, avgDay, avgNight, daysAbove65};
+}
+
+// Get volume statistics for current machine
+function getVolumeStats() {
+const machineData = MACHINES_DATA[currentMachine];
+if(!machineData || machineData.length === 0) return {bestDay:0,bestNight:0,avgDay:0};
+
+const dayVals = machineData.map(d=>d.volDay).filter(v=>v!==null);
+const nightVals = machineData.map(d=>d.volNight).filter(v=>v!==null);
+
+const bestDay = dayVals.length > 0 ? Math.max(...dayVals) : 0;
+const bestNight = nightVals.length > 0 ? Math.max(...nightVals) : 0;
+const avgDay = dayVals.length > 0 ? Math.round(dayVals.reduce((a,b)=>a+b,0)/dayVals.length*10)/10 : 0;
+
+return {bestDay, bestNight, avgDay};
+}
+
+// Get breakdown/failure data for current machine
+function getBreakdownStats() {
+const machineData = MACHINES_DATA[currentMachine];
+if(!machineData || machineData.length === 0) return {bd:0,pf:0,bdEvents:[],pfEvents:[]};
+
+const bdEvents = machineData.filter(d=>d.bd).map(d=>({date:d.date,desc:d.bd}));
+const pfEvents = machineData.filter(d=>d.pf).map(d=>({date:d.date,desc:d.pf}));
+
+// Count causes
+const causes = {};
+bdEvents.forEach(e=>{
+if(e.desc.includes('Powder')) causes['Powder Supply'] = (causes['Powder Supply']||0)+1;
+else if(e.desc.includes('Jaws')) causes['Bosch Jaws'] = (causes['Bosch Jaws']||0)+1;
+else if(e.desc.includes('ASI')) causes['ASI Module'] = (causes['ASI Module']||0)+1;
+else if(e.desc.includes('Knife') || e.desc.includes('Nut')) causes['Knife/Nut'] = (causes['Knife/Nut']||0)+1;
+else if(e.desc.includes('Egli')) causes['Egli Bale Door'] = (causes['Egli Bale Door']||0)+1;
+else if(e.desc.includes('Seal')) causes['Sealing'] = (causes['Sealing']||0)+1;
+else causes['Other'] = (causes['Other']||0)+1;
+});
+
+pfEvents.forEach(e=>{
+if(e.desc.includes('Powder')) causes['Powder Supply'] = (causes['Powder Supply']||0)+1;
+else if(e.desc.includes('Power')) causes['Power/Utility'] = (causes['Power/Utility']||0)+1;
+else causes['Other'] = (causes['Other']||0)+1;
+});
+
+return {bd:bdEvents.length, pf:pfEvents.length, bdEvents, pfEvents, causes};
+}
+
 function buildOverviewCharts() {
+const machineData = MACHINES_DATA[currentMachine];
+if(!machineData || machineData.length === 0) {
+document.getElementById('alerts-box').parentElement.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-muted)"><p>📊 No data available for ${currentMachine}</p><p style="font-size:11px;margin-top:8px">Data will appear when KPI entries are logged via the "Log Data" view.</p></div>`;
+document.querySelectorAll('[id^="stat-"]').forEach(el => {
+el.textContent = el.id.includes('val') ? '—' : '';
+});
+return;
+}
+
+// Update stat cards
+const oeeStats = getOEEStats();
+const volStats = getVolumeStats();
+const breakdownStats = getBreakdownStats();
+
+document.getElementById('stat-avg-day').textContent = `${oeeStats.avgDay}%`;
+document.getElementById('stat-avg-day-delta').innerHTML = oeeStats.avgDay >= 65 ? '<span class="du">✓ On target</span>' : '<span class="dd">↓ Below 65%</span>';
+
+document.getElementById('stat-avg-night').textContent = `${oeeStats.avgNight}%`;
+document.getElementById('stat-avg-night-delta').textContent = `${oeeStats.daysAbove65} days ≥65%`;
+
+document.getElementById('stat-bd-count').textContent = breakdownStats.bd;
+document.getElementById('stat-bd-delta').textContent = `Since ${machineData[0]?.date || 'start'} (${machineData.length} days)`;
+
+document.getElementById('stat-pf-count').textContent = breakdownStats.pf;
+document.getElementById('stat-pf-delta').textContent = breakdownStats.pf > 0 ? 'Reduce via root cause analysis' : 'None recorded ✓';
+
 const {labels, dayVals, nightVals} = getOEEArrays();
 // Filter out nulls for line chart (use NaN for gaps)
 const dv = dayVals.map(v=>v===null?NaN:v);
@@ -844,23 +974,73 @@ labels:['≥65% (On/above target)','50–65% (Amber)','<50% (Below target)'],
 datasets:[{data:[above65,b50_65,below50],backgroundColor:['#16a34a','#d97706','#dc2626'],borderWidth:0}]
 },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:FONT,size:11},boxWidth:10,padding:10}}}}});
 
-// Causes chart
+// Causes chart with dynamic data
+const breakdown = getBreakdownStats();
+const causeLabels = Object.keys(breakdown.causes).length > 0 ? Object.keys(breakdown.causes) : ['No events'];
+const causeData = Object.keys(breakdown.causes).length > 0 ? Object.values(breakdown.causes) : [0];
+const colors = ['#dc2626','#d97706','#0057a8','#7c3aed','#0891b2','#16a34a'];
 mc('chart-causes',{type:'bar',data:{
-labels:['Powder Supply','Bosch Jaws','ASI Module','Knife/Nut','Egli Bale Door','Sealing'],
-datasets:[{label:'Events',data:[8,1,1,1,1,1],backgroundColor:['#dc2626bb','#d97706bb','#0057a8bb','#7c3aedbb','#0891b2bb','#16a34abb'],borderRadius:5}]
+labels:causeLabels,
+datasets:[{label:'Events',data:causeData,backgroundColor:causeLabels.map((l,i)=>colors[i%colors.length]+'bb'),borderRadius:5}]
 },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{grid:{color:gridColor},ticks:tickStyle},y:{grid:{display:false},ticks:{...tickStyle,font:{family:FONT,size:11}}}}}});
 }
 
 function buildAlerts() {
 const box = document.getElementById('alerts-box');
 if(!box) return;
-const alerts = [
-{cls:'al-red',icon:'🔴',title:'Low OEE Days Detected',desc:'Multiple days below 50% — primarily driven by powder supply failures (upstream issue).'},
-{cls:'al-amber',icon:'⚠️',title:'F09 Upgrade In Progress',desc:'F09 upgrade started 02 Mar 2026. KPI tracking to begin on commissioning.'},
-{cls:'al-amber',icon:'⚠️',title:'Sealing Event — 23 Feb',desc:'Leaking packs detected on 23 Feb 2026. Investigate seal jaw calibration.'},
-{cls:'al-green',icon:'✅',title:'F06 Commissioned',desc:'F06 achieved 1kg: 50bpm and 2kg: 40bpm at commissioning. BTB: 0.'},
-{cls:'al-blue',icon:'ℹ️',title:'OEE Trending Up',desc:'Recent readings: 75% and 90% on 11 Mar. Machine stabilising well.'},
-];
+
+const machineData = MACHINES_DATA[currentMachine];
+if(!machineData || machineData.length === 0) {
+box.innerHTML = `<div class="alert-item al-blue"><div style="font-size:14px">ℹ️</div><div><div class="al-title">No Data Available</div><div class="al-desc">Start logging shift data for ${currentMachine} via the "Log Data" view to see KPI alerts.</div></div></div>`;
+return;
+}
+
+const schedule = UPGRADE_SCHEDULE.find(s=>s.machine===currentMachine);
+const schedule_status = schedule ? schedule.status : 'Unknown';
+
+const oeeStats = getOEEStats();
+const volStats = getVolumeStats();
+const breakdownStats = getBreakdownStats();
+
+const alerts = [];
+
+// OEE-based alerts
+if(oeeStats.daysAbove65 === 0) {
+alerts.push({cls:'al-red',icon:'🔴',title:'Low OEE Across All Days',desc:`No days yet meeting 65% target. Current avg: ${oeeStats.avgDay}%.`});
+} else if(oeeStats.daysAbove65 < Math.max(1, machineData.length/4)) {
+alerts.push({cls:'al-amber',icon:'⚠️',title:'Below-Target Performance',desc:`Only ${oeeStats.daysAbove65}/${machineData.filter(d=>numericOEE(d.oeeDay)!==null).length} days meeting 65% target.`});
+} else {
+alerts.push({cls:'al-green',icon:'✅',title:'OEE Trending Positively',desc:`${oeeStats.daysAbove65} days at/above 65% target. Latest OEE: ${oeeStats.bestDay}%.`});
+}
+
+// Upgrade status alert
+if(schedule_status==='Done') {
+alerts.push({cls:'al-green',icon:'✅',title:`${currentMachine} Fully Commissioned`,desc:`Upgrade completed. KPI tracking active since ${machineData[0].date}.`});
+} else if(schedule_status==='WIP') {
+alerts.push({cls:'al-amber',icon:'⚠️',title:`${currentMachine} Upgrade In Progress`,desc:`Commissioning expected to complete ${schedule.finish}. KPI tracking will begin then.`});
+} else if(schedule_status==='Not Started') {
+alerts.push({cls:'al-blue',icon:'ℹ️',title:`${currentMachine} Upgrade Pending`,desc:`Scheduled to begin ${schedule?schedule.start:'TBC'}. No data expected until commissioning.`});
+}
+
+// Breakdown alerts
+if(breakdownStats.bd > 0 || breakdownStats.pf > 0) {
+const totalEvents = breakdownStats.bd + breakdownStats.pf;
+const top = Object.entries(breakdownStats.causes).sort((a,b)=>b[1]-a[1])[0];
+if(top) {
+alerts.push({cls:'al-amber',icon:'🔧',title:`${totalEvents} Breakdown/Failure Events`,desc:`Top issue: ${top[0]} (${top[1]} events). Investigate root causes.`});
+}
+}
+
+// Volume alert
+if(volStats.avgDay < 10) {
+alerts.push({cls:'al-amber',icon:'📦',title:'Low Average Daily Volume',desc:`Current avg: ${volStats.avgDay}t/day. Target: >10t/day.`});
+}
+
+// Default alert if none triggered
+if(alerts.length === 0) {
+alerts.push({cls:'al-blue',icon:'ℹ️',title:'Machine Status Nominal',desc:`${currentMachine} is operating within parameters. Continue monitoring KPIs.`});
+}
+
 box.innerHTML = alerts.map(a=>`
 <div class="alert-item ${a.cls}">
 <div style="font-size:14px">${a.icon}</div>
@@ -1130,6 +1310,72 @@ setTimeout(() => window.print(), 800);
 }
 
 // ============================================================
+// EXCEL UPLOAD
+// ============================================================
+function handleExcelUpload(event) {
+const file = event.target.files[0];
+if(!file) return;
+
+const reader = new FileReader();
+reader.onload = function(e) {
+try {
+const data = new Uint8Array(e.target.result);
+const workbook = XLSX.read(data, {type:'array'});
+const sheetName = workbook.SheetNames[0];
+const worksheet = workbook.Sheets[sheetName];
+const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+// Parse JSON data and populate MACHINES_DATA
+let added = 0;
+jsonData.forEach(row => {
+// Expected columns: Date, Machine, OEE Day, OEE Night, Volume Day, Volume Night, Breakdown, Process Failure
+if(!row.Date || !row.Machine) return;
+
+const machine = String(row.Machine).trim().toUpperCase();
+if(!MACHINES_DATA[machine]) return;
+
+const entry = {
+date: String(row.Date),
+oeeDay: row['OEE Day'] !== undefined ? (isNaN(row['OEE Day']) ? row['OEE Day'] : Number(row['OEE Day'])) : null,
+oeeNight: row['OEE Night'] !== undefined ? Number(row['OEE Night']) || null : null,
+volDay: row['Volume Day'] !== undefined ? Number(row['Volume Day']) || null : null,
+volNight: row['Volume Night'] !== undefined ? Number(row['Volume Night']) || null : null,
+bd: row['Breakdown'] ? String(row['Breakdown']) : null,
+pf: row['Process Failure'] ? String(row['Process Failure']) : null,
+seal: row['Sealing'] ? String(row['Sealing']) : null
+};
+
+// Check if duplicate date exists
+const exists = MACHINES_DATA[machine].find(d=>d.date===entry.date);
+if(!exists) {
+MACHINES_DATA[machine].push(entry);
+added++;
+}
+});
+
+// Sort by date
+Object.keys(MACHINES_DATA).forEach(m => {
+MACHINES_DATA[m].sort((a,b) => new Date(a.date) - new Date(b.date));
+});
+
+showToast(`✓ Imported ${added} entries from Excel. Refresh to see updated charts.`);
+document.getElementById('excelUpload').value = '';
+
+// Refresh current view
+const activeView = document.querySelector('.view.active')?.id?.split('view-')[1] || 'overview';
+updateAllTitles();
+renderView(activeView);
+
+} catch(error) {
+showToast(`✗ Error parsing Excel file: ${error.message}`);
+console.error(error);
+}
+};
+
+reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
 // TOAST
 // ============================================================
 function showToast(msg) {
@@ -1143,6 +1389,7 @@ setTimeout(()=>t.classList.remove('show'),3800);
 // ============================================================
 document.addEventListener('DOMContentLoaded',()=>{
 document.getElementById('live-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+updateAllTitles();
 renderView('overview');
 });
 </script>
