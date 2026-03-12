@@ -7,6 +7,7 @@
 <title>Bosch SVE3600WR — F06 KPI Dashboard | Unilever Boksburg</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
@@ -1074,11 +1075,24 @@ tbody.innerHTML = userEntries.slice(0,10).map(e=>`<tr>
 // ============================================================
 async function exportAllPagesToPDF() {
 try {
+// Verify libraries are loaded
+if(!window.jsPDF) {
+showToast('❌ jsPDF library not loaded. Refreshing...');
+setTimeout(() => location.reload(), 1000);
+return;
+}
+if(!window.html2canvas) {
+showToast('❌ html2canvas library not loaded. Refreshing...');
+setTimeout(() => location.reload(), 1000);
+return;
+}
+
 showToast('📄 Starting PDF report...');
 
+const jsPDFModule = window.jsPDF.jsPDF || window.jsPDF;
 const views = ['overview', 'f06', 'oee', 'volume', 'breakdowns', 'tracker', 'impact'];
 const currentViewId = document.querySelector('.view.active')?.id?.split('view-')[1] || 'overview';
-const pdf = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+const pdf = new jsPDFModule({orientation:'portrait', unit:'mm', format:'a4'});
 let isFirstPage = true;
 
 // Create and capture cover page
