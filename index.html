@@ -1071,59 +1071,85 @@ tbody.innerHTML = userEntries.slice(0,10).map(e=>`<tr>
 // ============================================================
 // PDF EXPORT
 // ============================================================
-function exportAllPagesToPDF() {
-showToast('📄 Generating PDF... This may take a moment');
-setTimeout(() => {
+async function exportAllPagesToPDF() {
+showToast('📄 Generating PDF... rendering all pages');
 const views = ['overview', 'f06', 'oee', 'volume', 'breakdowns', 'tracker', 'impact'];
+const currentView = document.querySelector('.view.active');
 const element = document.createElement('div');
 element.style.padding = '20px';
 element.style.backgroundColor = '#f0f4f8';
 element.style.fontFamily = 'DM Sans, sans-serif';
 
 let htmlContent = `
-<div style="text-align:center;margin-bottom:40px;">
-<h1 style="color:#0057a8;margin-bottom:5px;">Bosch SVE3600WR Upgrade Dashboard</h1>
-<p style="color:#475569;font-size:14px;">Comprehensive KPI Report · F06 Post-Upgrade Performance</p>
-<p style="color:#94a3b8;font-size:12px;">Generated: ${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+<div style="text-align:center;margin-bottom:40px;padding:20px;background:#fff;border-radius:8px;">
+<h1 style="color:#0057a8;margin-bottom:5px;font-size:28px;">Bosch SVE3600WR Upgrade Dashboard</h1>
+<p style="color:#475569;font-size:14px;margin:10px 0;">Comprehensive KPI Report · F06 Post-Upgrade Performance</p>
+<p style="color:#94a3b8;font-size:12px;">${new Date().toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
 </div>
 `;
 
-views.forEach((viewId, idx) => {
+for(const viewId of views) {
 const viewEl = document.getElementById('view-' + viewId);
-if(!viewEl) return;
+if(!viewEl) continue;
+
+// Show the view to render charts
+document.querySelectorAll('.view').forEach(v=>v.style.display='none');
+viewEl.style.display='block';
+
+// Render the view to generate charts
+renderView(viewId);
+
+// Wait for charts to render
+await new Promise(r => setTimeout(r, 1500));
+
+// Clone the visible, rendered view
 const clone = viewEl.cloneNode(true);
 clone.style.display = 'block';
-clone.style.pageBreakBefore = idx > 0 ? 'always' : 'avoid';
+clone.style.pageBreakAfter = 'always';
+clone.style.pageBreakBefore = 'avoid';
 clone.style.padding = '20px';
 clone.style.backgroundColor = '#fff';
-clone.style.marginBottom = '40px';
-clone.style.borderRadius = '8px';
+clone.style.marginBottom = '0';
+clone.style.borderRadius = '0';
+
+// Convert all canvas elements to images
 const canvases = clone.querySelectorAll('canvas');
 canvases.forEach(canvas => {
+if(canvas.width && canvas.height && canvas.getContext) {
 const img = document.createElement('img');
 img.src = canvas.toDataURL('image/png');
 img.style.maxWidth = '100%';
 img.style.height = 'auto';
-img.style.margin = '10px 0';
+img.style.display = 'block';
+img.style.margin = '15px 0';
 canvas.parentNode.replaceChild(img, canvas);
+}
 });
+
 htmlContent += clone.outerHTML;
-});
+}
 
 element.innerHTML = htmlContent;
 
 const opt = {
-margin: 10,
+margin: [8, 8, 8, 8],
 filename: 'Bosch_Dashboard_Report.pdf',
-image: {type:'jpeg',quality:0.98},
-html2canvas: {scale:2},
-jsPDF: {orientation:'portrait',unit:'mm',format:'a4'}
+image: {type:'png',quality:0.98},
+html2canvas: {scale:2,useCORS:true,logging:false},
+jsPDF: {orientation:'portrait',unit:'mm',format:'a4',compress:true}
 };
 
-html2pdf().set(opt).from(element).save().then(() => {
+try {
+await html2pdf().set(opt).from(element).save();
 showToast('✅ PDF exported successfully!');
-});
-}, 300);
+} catch(e) {
+console.error('PDF export error:', e);
+showToast('❌ Error generating PDF');
+}
+
+// Restore original view
+document.querySelectorAll('.view').forEach(v=>v.style.display='none');
+if(currentView) currentView.classList.add('active');
 }
 
 // ============================================================
