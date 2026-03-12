@@ -214,7 +214,7 @@ Bosch Upgrades - Dashboard
 <div class="topbar">
 <div>
 <div class="topbar-title">Bosch SVE3600WR Upgrade Dashboard</div>
-<div class="topbar-sub" id="view-label">Executive Overview · F06 Real Data</div>
+<div class="topbar-sub"><span id="view-label">Executive Overview · F06 Real Data</span> <select id="machineSelector" onchange="switchMachine(this.value)" style="margin-left:20px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:var(--blue);"><option value="F06">F06 - Done ✓</option><option value="F09">F09 - WIP</option><option value="F08">F08</option><option value="F07">F07</option><option value="F10">F10</option><option value="F05">F05</option><option value="F04">F04</option><option value="F03">F03</option><option value="F02">F02</option><option value="F01">F01</option><option value="F11">F11</option><option value="F12">F12</option></select></div>
 </div>
 <div class="topbar-right">
 <span class="badge badge-green">F06: Done ✓</span>
@@ -610,9 +610,12 @@ Bosch Upgrades - Dashboard
 
 <script>
 // ============================================================
-// REAL F06 DATA — extracted from Bosch_Upgrades_F06.xlsx
+// CENTRALIZED MACHINES DATA — SCALABLE STRUCTURE
 // ============================================================
-const F06_DATA = [
+let currentMachine = 'F06'; // Track active machine
+
+const MACHINES_DATA = {
+F06: [
 // Commissioning entries
 {date:'2026-02-04',oeeDay:'Not yet measured',oeeNight:null,volDay:null,volNight:null,seal:'TBC',bd:null,pf:null,speed:'1kg: 50bpm'},
 {date:'2026-02-05',oeeDay:'Not yet measured',oeeNight:null,volDay:16,volNight:null,seal:'No leakers',bd:'Temperature for Jaws not increasing',pf:null},
@@ -652,7 +655,19 @@ const F06_DATA = [
 {date:'2026-03-10',oeeDay:'GEZA',oeeNight:70,volDay:null,volNight:29},
 {date:'2026-03-11',oeeDay:75,oeeNight:90,volDay:35,volNight:46},
 {date:'2026-03-12',oeeDay:56,oeeNight:80,volDay:28,volNight:41},
-];
+],
+F09: [],
+F08: [],
+F07: [],
+F10: [],
+F05: [],
+F04: [],
+F03: [],
+F02: [],
+F01: [],
+F11: [],
+F12: [],
+};
 
 // Upgrade schedule from 2026 Matrix
 const UPGRADE_SCHEDULE = [
@@ -711,6 +726,15 @@ if(v === null || v === undefined) return '<span style="color:var(--text-muted)">
 return `<span class="${v>=20?'cg':v>=10?'ca':'cr'} fw7">${v}t</span>`;
 }
 
+function switchMachine(machine) {
+currentMachine = machine;
+document.getElementById('machineSelector').value = machine;
+const labels = {overview:'Executive Overview',f06:'Machine Live KPIs',oee:'OEE Trend Analysis',volume:'Volume Analysis',breakdowns:'Breakdowns & Process Failures',tracker:'Upgrade Tracker',impact:'Upgrade Impact',entry:'Log Data'};
+const activeView = document.querySelector('.view.active')?.id?.split('view-')[1] || 'overview';
+document.getElementById('view-label').innerHTML = `<span>${labels[activeView]||activeView} · ${machine} Real Data</span> <select id="machineSelector" onchange="switchMachine(this.value)" style="margin-left:20px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:var(--blue);"><option value="F06">F06 - Done ✓</option><option value="F09">F09 - WIP</option><option value="F08">F08</option><option value="F07">F07</option><option value="F10">F10</option><option value="F05">F05</option><option value="F04">F04</option><option value="F03">F03</option><option value="F02">F02</option><option value="F01">F01</option><option value="F11">F11</option><option value="F12">F12</option></select>`;
+renderView(activeView);
+}
+
 // ============================================================
 // NAVIGATION
 // ============================================================
@@ -720,8 +744,10 @@ document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
 document.getElementById('view-'+id).classList.add('active');
 if(el) el.classList.add('active');
 else document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')?.includes(`'${id}'`))n.classList.add('active');});
-const labels = {overview:'Executive Overview',f06:'F06 Live KPIs',oee:'OEE Trend Analysis',volume:'Volume Analysis',breakdowns:'Breakdowns & Process Failures',tracker:'Upgrade Tracker',impact:'Upgrade Impact',entry:'Log Data'};
-document.getElementById('view-label').textContent = (labels[id]||id) + ' · F06 Real Data';
+const labels = {overview:'Executive Overview',f06:'Machine Live KPIs',oee:'OEE Trend Analysis',volume:'Volume Analysis',breakdowns:'Breakdowns & Process Failures',tracker:'Upgrade Tracker',impact:'Upgrade Impact',entry:'Log Data'};
+const viewText = (labels[id]||id) + ` · ${currentMachine} Real Data`;
+document.getElementById('view-label').innerHTML = `<span>${viewText}</span> <select id="machineSelector" onchange="switchMachine(this.value)" style="margin-left:20px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:var(--blue);"><option value="F06">F06 - Done ✓</option><option value="F09">F09 - WIP</option><option value="F08">F08</option><option value="F07">F07</option><option value="F10">F10</option><option value="F05">F05</option><option value="F04">F04</option><option value="F03">F03</option><option value="F02">F02</option><option value="F01">F01</option><option value="F11">F11</option><option value="F12">F12</option></select>`;
+document.getElementById('machineSelector').value = currentMachine;
 setTimeout(()=>renderView(id), 60);
 }
 
@@ -759,8 +785,9 @@ return {label,data,borderColor:color,backgroundColor:fill?color+'18':'transparen
 
 // Get numeric OEE arrays for charts
 function getOEEArrays() {
+const machineData = MACHINES_DATA[currentMachine];
 const labels=[], dayVals=[], nightVals=[], dayColors=[], nightColors=[];
-F06_DATA.forEach(d=>{
+machineData.forEach(d=>{
 const numD = numericOEE(d.oeeDay);
 const numN = numericOEE(d.oeeNight);
 const specD = isSpecialDay(d.oeeDay);
@@ -821,11 +848,12 @@ box.innerHTML = alerts.map(a=>`
 }
 
 function buildHeatmap() {
+const machineData = MACHINES_DATA[currentMachine];
 const container = document.getElementById('heatmap-container');
 if(!container) return;
 let html = `<table style="border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace"><tr>
 <th style="padding:4px 10px;text-align:left;color:var(--text-muted);font-size:9px;white-space:nowrap">KPI</th>`;
-F06_DATA.forEach(d=>{
+machineData.forEach(d=>{
 const short = d.date.slice(5).replace('-','/');
 html += `<th style="padding:3px 2px;font-size:9px;color:var(--text-muted);font-weight:600;writing-mode:vertical-rl;text-orientation:mixed;height:54px">${short}</th>`;
 });
@@ -833,7 +861,7 @@ html += '</tr>';
 
 // OEE Day row
 html += `<tr><td style="padding:4px 10px;font-weight:700;white-space:nowrap;font-size:11px">OEE Day</td>`;
-F06_DATA.forEach(d=>{
+machineData.forEach(d=>{
 const v = d.oeeDay;
 const num = numericOEE(v);
 const spec = isSpecialDay(v);
@@ -845,7 +873,7 @@ html += '</tr>';
 
 // OEE Night row
 html += `<tr><td style="padding:4px 10px;font-weight:700;white-space:nowrap;font-size:11px">OEE Night</td>`;
-F06_DATA.forEach(d=>{
+machineData.forEach(d=>{
 const v = d.oeeNight;
 const cls = v!==null ? oeeHmClass(v) : 'hm-grey';
 const label = v!==null ? v+'%' : '—';
@@ -855,7 +883,7 @@ html += '</tr>';
 
 // Vol Day row
 html += `<tr><td style="padding:4px 10px;font-weight:700;white-space:nowrap;font-size:11px">Vol Day (t)</td>`;
-F06_DATA.forEach(d=>{
+machineData.forEach(d=>{
 const v = d.volDay;
 const cls = v!==null ? (v>=20?'hm-green':v>=10?'hm-amber':'hm-red') : 'hm-grey';
 html += `<td style="padding:2px"><div class="hm-cell ${cls}">${v!==null?v+'t':'—'}</div></td>`;
@@ -865,9 +893,10 @@ container.innerHTML = html;
 }
 
 function buildFullTable() {
+const machineData = MACHINES_DATA[currentMachine];
 const tbody = document.getElementById('f06-tbody');
 if(!tbody) return;
-tbody.innerHTML = F06_DATA.map(d=>`<tr>
+tbody.innerHTML = machineData.map(d=>`<tr>
 <td style="font-family:'DM Mono',monospace;font-size:11px;white-space:nowrap">${d.date}</td>
 <td>${fmtOEE(d.oeeDay)}</td>
 <td>${fmtOEE(d.oeeNight)}</td>
@@ -896,8 +925,9 @@ lineDataset('Night OEE %', nv, '#d97706', true),
 }
 
 function buildVolumeCharts() {
+const machineData = MACHINES_DATA[currentMachine];
 const labels=[], vd=[], vn=[];
-F06_DATA.forEach(d=>{
+machineData.forEach(d=>{
 if(d.volDay!==null||d.volNight!==null){
 labels.push(d.date.slice(5).replace('-','/'));
 vd.push(d.volDay??NaN);
@@ -910,7 +940,7 @@ mc('chart-volume-main',{type:'bar',data:{labels,datasets:[
 ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:FONT,size:11},boxWidth:10}}},scales:baseScales}});
 
 // OEE vs Volume scatter
-const points = F06_DATA.filter(d=>numericOEE(d.oeeDay)!==null&&d.volDay!==null).map(d=>({x:numericOEE(d.oeeDay),y:d.volDay}));
+const points = machineData.filter(d=>numericOEE(d.oeeDay)!==null&&d.volDay!==null).map(d=>({x:numericOEE(d.oeeDay),y:d.volDay}));
 mc('chart-vol-oee',{type:'scatter',data:{datasets:[{label:'OEE Day % vs Volume (t)',data:points,backgroundColor:'rgba(0,87,168,0.6)',pointRadius:5}]},
 options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:FONT,size:11}}}},
 scales:{x:{...baseScales.x,title:{display:true,text:'OEE %',font:{family:FONT,size:11}},ticks:tickStyle},y:{...baseScales.y,title:{display:true,text:'Volume (t)',font:{family:FONT,size:11}},ticks:tickStyle}}}});
