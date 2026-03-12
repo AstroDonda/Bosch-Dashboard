@@ -745,43 +745,47 @@ if(v === null || v === undefined) return '<span style="color:var(--text-muted)">
 return `<span class="${v>=20?'cg':v>=10?'ca':'cr'} fw7">${v}t</span>`;
 }
 
+// Helper to safely update element if it exists
+function setIfExists(id, text) {
+const el = document.getElementById(id);
+if(el) el.textContent = text;
+}
+
 function updateAllTitles() {
 // Update top bar subtitle based on machine data
 const machineData = MACHINES_DATA[currentMachine];
 const hasData = machineData && machineData.length > 0;
-if(!hasData) {
-document.getElementById('view-label').textContent = `${currentMachine} — No data available`;
-} else {
-const lastDate = machineData[machineData.length - 1].date;
-document.getElementById('view-label').textContent = `${currentMachine} Real Data · Last entry: ${lastDate}`;
-}
+
+const viewLabel = hasData 
+  ? `${currentMachine} Real Data · Last entry: ${machineData[machineData.length - 1].date}`
+  : `${currentMachine} — No data available`;
+setIfExists('view-label', viewLabel);
 
 // Overview subtitle
 const schedule = UPGRADE_SCHEDULE.find(s=>s.machine===currentMachine);
 const overviewSub = hasData 
   ? `${currentMachine} ${schedule?.status === 'Done' ? 'post-upgrade' : ''} performance · Real data from ${machineData[0].date} onwards`
   : `${currentMachine} — Awaiting commissioning${schedule ? ` (scheduled: ${schedule.start})` : ''}`;
-  
-document.getElementById('overview-sub').textContent = overviewSub;
+setIfExists('overview-sub', overviewSub);
 
-// Update all section titles
-document.getElementById('f06-title').textContent = `${currentMachine} Live KPI Dashboard`;
-document.getElementById('f06-sub').textContent = hasData ? `All captured data since ${machineData[0].date}` : 'No data available - awaiting first entry';
-document.getElementById('oee-trend-sub').textContent = hasData ? `${currentMachine} day & night shift OEE over time · Target 65%` : `${currentMachine} — No KPI data yet`;
-document.getElementById('volume-trend-sub').textContent = hasData ? `${currentMachine} daily production output in tonnes · Target: >10 tons/shift` : `${currentMachine} — No volume data yet`;
-document.getElementById('breakdowns-sub').textContent = hasData ? `${currentMachine} real event log since commissioning` : `${currentMachine} — No breakdown records yet`;
-document.getElementById('impact-title').textContent = `Upgrade Impact — ${currentMachine}`;
-document.getElementById('impact-sub').textContent = hasData ? 'Commissioning baseline vs post-upgrade performance trend' : `${currentMachine} commissioning pending`;
-document.getElementById('causes-title').textContent = `Top Failure Root Causes — ${currentMachine}`;
-document.getElementById('heatmap-title').textContent = `${currentMachine} Daily OEE Heatmap`;
-document.getElementById('fulllog-title').textContent = `Full ${currentMachine} Daily Log`;
-document.getElementById('oee-day-title').textContent = `${currentMachine} OEE Day Shift — Full Trend`;
-document.getElementById('oee-night-title').textContent = `${currentMachine} OEE Night Shift — Full Trend`;
-document.getElementById('volume-title').textContent = `${currentMachine} Volume — Day vs Night (tonnes)`;
-document.getElementById('bd-log-title').textContent = `${currentMachine} Mechanical Breakdown Log`;
-document.getElementById('pf-log-title').textContent = `${currentMachine} Process Failure Log`;
-document.getElementById('stabilise-title').textContent = `${currentMachine} OEE Over Time — Stabilisation Curve`;
-document.getElementById('target-days-title').textContent = `${currentMachine}: Days with OEE ≥ 65% (Target)`;
+// Update all section titles (only if they exist in current DOM)
+setIfExists('f06-title', `${currentMachine} Live KPI Dashboard`);
+setIfExists('f06-sub', hasData ? `All captured data since ${machineData[0].date}` : 'No data available - awaiting first entry');
+setIfExists('oee-trend-sub', hasData ? `${currentMachine} day & night shift OEE over time · Target 65%` : `${currentMachine} — No KPI data yet`);
+setIfExists('volume-trend-sub', hasData ? `${currentMachine} daily production output in tonnes · Target: >10 tons/shift` : `${currentMachine} — No volume data yet`);
+setIfExists('breakdowns-sub', hasData ? `${currentMachine} real event log since commissioning` : `${currentMachine} — No breakdown records yet`);
+setIfExists('impact-title', `Upgrade Impact — ${currentMachine}`);
+setIfExists('impact-sub', hasData ? 'Commissioning baseline vs post-upgrade performance trend' : `${currentMachine} commissioning pending`);
+setIfExists('causes-title', `Top Failure Root Causes — ${currentMachine}`);
+setIfExists('heatmap-title', `${currentMachine} Daily OEE Heatmap`);
+setIfExists('fulllog-title', `Full ${currentMachine} Daily Log`);
+setIfExists('oee-day-title', `${currentMachine} OEE Day Shift — Full Trend`);
+setIfExists('oee-night-title', `${currentMachine} OEE Night Shift — Full Trend`);
+setIfExists('volume-title', `${currentMachine} Volume — Day vs Night (tonnes)`);
+setIfExists('bd-log-title', `${currentMachine} Mechanical Breakdown Log`);
+setIfExists('pf-log-title', `${currentMachine} Process Failure Log`);
+setIfExists('stabilise-title', `${currentMachine} OEE Over Time — Stabilisation Curve`);
+setIfExists('target-days-title', `${currentMachine}: Days with OEE ≥ 65% (Target)`);
 }
 
 function switchMachine(machine) {
@@ -929,29 +933,34 @@ return {bd:bdEvents.length, pf:pfEvents.length, bdEvents, pfEvents, causes};
 function buildOverviewCharts() {
 const machineData = MACHINES_DATA[currentMachine];
 if(!machineData || machineData.length === 0) {
-document.getElementById('alerts-box').parentElement.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-muted)"><p>📊 No data available for ${currentMachine}</p><p style="font-size:11px;margin-top:8px">Data will appear when KPI entries are logged via the "Log Data" view.</p></div>`;
+const alertsBox = document.getElementById('alerts-box');
+if(alertsBox && alertsBox.parentElement) {
+alertsBox.parentElement.innerHTML = `<div style="padding:18px;text-align:center;color:var(--text-muted)"><p>📊 No data available for ${currentMachine}</p><p style="font-size:11px;margin-top:8px">Data will appear when KPI entries are logged via the "Log Data" view.</p></div>`;
+}
+// Clear stat cards if they exist
 document.querySelectorAll('[id^="stat-"]').forEach(el => {
 el.textContent = el.id.includes('val') ? '—' : '';
 });
 return;
 }
 
-// Update stat cards
+// Update stat cards (only if they exist)
 const oeeStats = getOEEStats();
 const volStats = getVolumeStats();
 const breakdownStats = getBreakdownStats();
 
-document.getElementById('stat-avg-day').textContent = `${oeeStats.avgDay}%`;
-document.getElementById('stat-avg-day-delta').innerHTML = oeeStats.avgDay >= 65 ? '<span class="du">✓ On target</span>' : '<span class="dd">↓ Below 65%</span>';
+setIfExists('stat-avg-day', `${oeeStats.avgDay}%`);
+const sdayDelta = document.getElementById('stat-avg-day-delta');
+if(sdayDelta) sdayDelta.innerHTML = oeeStats.avgDay >= 65 ? '<span class="du">✓ On target</span>' : '<span class="dd">↓ Below 65%</span>';
 
-document.getElementById('stat-avg-night').textContent = `${oeeStats.avgNight}%`;
-document.getElementById('stat-avg-night-delta').textContent = `${oeeStats.daysAbove65} days ≥65%`;
+setIfExists('stat-avg-night', `${oeeStats.avgNight}%`);
+setIfExists('stat-avg-night-delta', `${oeeStats.daysAbove65} days ≥65%`);
 
-document.getElementById('stat-bd-count').textContent = breakdownStats.bd;
-document.getElementById('stat-bd-delta').textContent = `Since ${machineData[0]?.date || 'start'} (${machineData.length} days)`;
+setIfExists('stat-bd-count', String(breakdownStats.bd));
+setIfExists('stat-bd-delta', `Since ${machineData[0]?.date || 'start'} (${machineData.length} days)`);
 
-document.getElementById('stat-pf-count').textContent = breakdownStats.pf;
-document.getElementById('stat-pf-delta').textContent = breakdownStats.pf > 0 ? 'Reduce via root cause analysis' : 'None recorded ✓';
+setIfExists('stat-pf-count', String(breakdownStats.pf));
+setIfExists('stat-pf-delta', breakdownStats.pf > 0 ? 'Reduce via root cause analysis' : 'None recorded ✓');
 
 const {labels, dayVals, nightVals} = getOEEArrays();
 // Filter out nulls for line chart (use NaN for gaps)
