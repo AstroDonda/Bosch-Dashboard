@@ -1071,24 +1071,11 @@ tbody.innerHTML = userEntries.slice(0,10).map(e=>`<tr>
 }
 
 // ============================================================
-// PDF EXPORT - SIMPLEST APPROACH
+// PDF EXPORT
 // ============================================================
 function exportAllPagesToPDF() {
-showToast('📄 Exporting PDF...');
-const element = document.querySelector('.app');
-const opt = {
-margin: 5,
-filename: 'Bosch_Dashboard_Report.pdf',
-image: {type:'jpeg', quality:0.98},
-html2canvas: {scale:2, useCORS:true},
-jsPDF: {orientation:'portrait', unit:'mm', format:'a4'}
-};
-html2pdf().set(opt).from(element).save().then(() => {
-showToast('✅ PDF downloaded successfully!');
-}).catch(err => {
-console.error('PDF Export Error:', err);
-showToast('❌ Export failed. Try using browser print (Ctrl+P).');
-});
+showToast('📄 Press Ctrl+P (or Cmd+P on Mac) to print as PDF');
+setTimeout(() => window.print(), 800);
 }
 
 // ============================================================
